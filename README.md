@@ -15,8 +15,8 @@ An export plugin for stripping comments and "conditional compilation" of GDScrip
 The following errors do not affect the export success:
 
 ```
-	No loader found for resource: res://.godot/global_script_class_cache.cfg.
-	editor/export/editor_export_platform.cpp:776 - Condition "res.is_null()" is true. Returning: p_path
+    No loader found for resource: res://.godot/global_script_class_cache.cfg.
+    editor/export/editor_export_platform.cpp:776 - Condition "res.is_null()" is true. Returning: p_path
 ```
 
 ### Features
@@ -54,15 +54,15 @@ var c := 3
 
 ## Comment.
 func _ready() -> void:
-	print(1) # Comment.
-	if OS.has_feature("debug"):
-		print("Debug: b = ", b)
-	# Comment.
-	elif OS.has_feature("release"):
-		print("Release.")
-	else:
-		print("Impossible?!")
-	print(2)
+    print(1) # Comment.
+    if OS.has_feature("debug"):
+        print("Debug: b = ", b)
+    # Comment.
+    elif OS.has_feature("release"):
+        print("Release.")
+    else:
+        print("Impossible?!")
+    print(2)
 ```
 
 After exporting with the `release` feature tag:
@@ -72,9 +72,9 @@ extends Node
 var a := 1
 var c := 3
 func _ready() -> void:
-	print(1) 
-	print("Release.")
-	print(2)
+    print(1) 
+    print("Release.")
+    print(2)
 ```
 
 After exporting with the `debug` feature tag:
@@ -85,7 +85,7 @@ var a := 1
 var b := 2
 var c := 3
 func _ready() -> void:
-	print(1) 
-	print("Debug: b = ", b)
-	print(2)
+    print(1) 
+    print("Debug: b = ", b)
+    print(2)
 ```
