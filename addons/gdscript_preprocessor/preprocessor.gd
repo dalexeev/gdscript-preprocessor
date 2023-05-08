@@ -1,21 +1,18 @@
 extends RefCounted
 
 
-class _IfBlock extends RefCounted:
-	enum Mode { NORMAL, DEDENT, REMOVE }
-	var mode: Mode
-	var indent: String
-	var fired: bool
-	var consumed: bool = true
-	var has_if: bool = true
+enum _Trilean { TRUE, FALSE, UNKNOWN }
 
-
-enum _EvalResult {
-	TRUE,
-	FALSE,
-	UNKNOWN,
-	ERROR,
-}
+class _Block extends RefCounted:
+	var source_indent: int
+	var output_indent: int
+	var conditional: bool # true - "if"/"elif"/"else", false - other.
+	var parent_state := _Trilean.UNKNOWN
+	var state := _Trilean.UNKNOWN
+	var fired: bool # TRUE branch was found. Next "elif"/"else" blocks must be removed.
+	var if_outputed: bool # "if" was outputed (some "if"/"elif" was UNKNOWN).
+	var if_consumed: bool # Replace next non-FALSE "elif" with "if" or unwrap "else".
+	var all_consumed: bool # All branches was removed, a "pass" is needed.
 
 const _TAB = 0x0009 # "\t"
 const _NEWLINE = 0x000A # "\n"
@@ -49,12 +46,14 @@ var _length: int
 var _position: int
 var _line: int
 
+var _indent_char: int
 var _paren_stack: Array[int]
+var _block_stack: Array[_Block]
 var _if_directive_stack: Array[bool]
-var _if_block_stack: Array[_IfBlock]
 
 var _os_has_feature_regex := RegEx.create_from_string("OS\\.has_feature\\(([\"'])(\\w+)\\1\\)")
-var _cond_regex := RegEx.create_from_string("^(false|true|and|or|not|&&|\\|\\||!|\\(|\\)| |\\t)+$")
+var _cond_regex := RegEx.create_from_string(
+		"^(false|true|and|or|not|&&|\\|\\||!|\\(|\\)| |\\t|\\n)+$")
 var _expression := Expression.new()
 
 
@@ -68,9 +67,11 @@ func preprocess(source_code: String) -> bool:
 	_position = 0
 	_line = 1
 
+	_indent_char = 0
 	_paren_stack.clear()
+	_block_stack.clear()
+	_block_stack.push_back(_Block.new())
 	_if_directive_stack.clear()
-	_if_block_stack.clear()
 
 	while _position < _length:
 		if _source.unicode_at(_position) == _HASH:
@@ -89,11 +90,13 @@ func preprocess(source_code: String) -> bool:
 		error_message = "Unclosed directive."
 		return false
 
-	var last_removed_block: _IfBlock = null
-	while not _if_block_stack.is_empty():
-		last_removed_block = _if_block_stack.pop_back()
-	if last_removed_block and last_removed_block.consumed:
-		_append(last_removed_block.indent + "pass\n")
+	var last_consumed_block: _Block = null
+	while _block_stack.back().source_indent > 0:
+		var block: _Block = _block_stack.pop_back()
+		if block.all_consumed:
+			last_consumed_block = block
+	if last_consumed_block:
+		_append(last_consumed_block.output_indent, "pass\n")
 
 	return true
 
@@ -118,10 +121,10 @@ func _parse_comment_line() -> void:
 
 func _parse_if_directive(cond: String) -> void:
 	var res := _eval_cond(cond)
-	if res == _EvalResult.ERROR or res == _EvalResult.UNKNOWN:
+	if res == _Trilean.UNKNOWN:
 		error_message = 'Ivalid condition for directive "#~if".'
 		return
-	var state := true if res == _EvalResult.TRUE else false
+	var state := true if res == _Trilean.TRUE else false
 	if not _if_directive_stack.is_empty() and _if_directive_stack.back() == false:
 		state = false
 	_if_directive_stack.push_back(state)
@@ -135,12 +138,19 @@ func _parse_endif_directive() -> void:
 
 
 func _parse_statement() -> void:
-	var from := _position
-	while _match(_TAB) or _match(_SPACE):
-		_advance()
-	var indent := _get_substr(from)
+	var indent_level := 0
+	if _indent_char:
+		while _match(_indent_char):
+			_advance()
+			indent_level += 1
+	else:
+		if _match(_TAB) or _match(_SPACE):
+			_indent_char = _source.unicode_at(_position)
+			while _match(_indent_char):
+				_advance()
+				indent_level += 1
 
-	from = _position
+	var from := _position
 	var string := ""
 
 	while _position < _length:
@@ -182,98 +192,106 @@ func _parse_statement() -> void:
 	if string.strip_edges().is_empty():
 		return
 
-	var last_removed_block: _IfBlock = null
-	while not _if_block_stack.is_empty():
-		var block: _IfBlock = _if_block_stack.back()
-		if indent.begins_with(block.indent) and indent.length() > block.indent.length():
-			break
-		last_removed_block = _if_block_stack.pop_back()
+	var current_block: _Block = _block_stack.back()
+	if indent_level > current_block.source_indent:
+		var block := _Block.new()
+		block.source_indent = indent_level
+		if current_block.state == _Trilean.TRUE:
+			block.output_indent = current_block.output_indent
+		else:
+			block.output_indent = current_block.output_indent + 1
+		block.parent_state = current_block.state
+		block.all_consumed = true # Until we prove otherwise.
+		current_block = block
+		_block_stack.push_back(block)
+	elif indent_level < current_block.source_indent:
+		var last_consumed_block: _Block = null
+		while indent_level < _block_stack.back().source_indent:
+			var block: _Block = _block_stack.pop_back()
+			if block.all_consumed:
+				last_consumed_block = block
+		if last_consumed_block:
+			_append(last_consumed_block.output_indent, "pass\n")
+		current_block = _block_stack.back()
 
 	if string.begins_with("if "):
-		if last_removed_block and last_removed_block.consumed:
-			_append(last_removed_block.indent + "pass\n")
-
-		var res := _eval_cond(string.trim_prefix("if ").strip_edges().trim_suffix(":\n") \
+		var state := _eval_cond(string.trim_prefix("if ").strip_edges().trim_suffix(":")
 				.replace("\\\n", "\n"))
-		var block := _IfBlock.new()
-		block.indent = indent
-		match res:
-			_EvalResult.TRUE:
-				block.mode = _IfBlock.Mode.DEDENT
-				block.fired = true
-				block.consumed = false
-			_EvalResult.FALSE:
-				block.mode = _IfBlock.Mode.REMOVE
-				block.has_if = false
-			_EvalResult.UNKNOWN:
-				_append(indent + string)
-				block.mode = _IfBlock.Mode.NORMAL
-				block.consumed = false
-			_EvalResult.ERROR:
-				error_message = "Failed to evalute expression."
-				return
-		_if_block_stack.append(block)
+		current_block.conditional = true
+		current_block.state = _trilean_and_b(current_block.parent_state, state)
+		current_block.fired = false
+		current_block.if_outputed = false
+		current_block.if_consumed = false
+		match current_block.state:
+			_Trilean.TRUE:
+				current_block.fired = true
+				current_block.all_consumed = false
+			_Trilean.FALSE:
+				current_block.if_consumed = true
+			_Trilean.UNKNOWN:
+				_append(current_block.output_indent, string)
+				current_block.if_outputed = true
+				current_block.all_consumed = false
 	elif string.begins_with("elif "):
-		if not last_removed_block or last_removed_block.indent != indent:
+		if not current_block.conditional:
 			error_message = 'Unexpected "elif".'
 			return
-		if last_removed_block.fired:
-			last_removed_block.mode = _IfBlock.Mode.REMOVE
-			_if_block_stack.append(last_removed_block)
+		if current_block.fired:
+			current_block.state = _Trilean.FALSE
 			return
-		var res := _eval_cond(string.trim_prefix("elif ").trim_suffix(":\n").strip_edges() \
+		var state := _eval_cond(string.trim_prefix("elif ").strip_edges().trim_suffix(":")
 				.replace("\\\n", "\n"))
-		match res:
-			_EvalResult.TRUE:
-				last_removed_block.mode = _IfBlock.Mode.DEDENT
-				last_removed_block.fired = true
-				last_removed_block.consumed = false
-			_EvalResult.FALSE:
-				last_removed_block.mode = _IfBlock.Mode.REMOVE
-			_EvalResult.UNKNOWN:
-				if last_removed_block.has_if:
-					_append(indent + string)
+		current_block.state = _trilean_and_b(current_block.parent_state, state)
+		match current_block.state:
+			_Trilean.TRUE:
+				if current_block.if_outputed:
+					_append(current_block.output_indent, "else:\n")
+					current_block.state = _Trilean.UNKNOWN
+				current_block.fired = true
+				current_block.all_consumed = false
+			_Trilean.FALSE:
+				pass
+			_Trilean.UNKNOWN:
+				if current_block.if_consumed:
+					_append(current_block.output_indent, string.trim_prefix("el"))
+					current_block.if_outputed = true
+					current_block.if_consumed = false
 				else:
-					_append(indent + string.trim_prefix("el"))
-					last_removed_block.has_if = true
-				last_removed_block.mode = _IfBlock.Mode.NORMAL
-				last_removed_block.consumed = false
-			_EvalResult.ERROR:
-				error_message = "Failed to evalute expression."
-				return
-		_if_block_stack.append(last_removed_block)
+					_append(current_block.output_indent, string)
+				current_block.all_consumed = false
 	elif string.begins_with("else:"):
-		if not last_removed_block or last_removed_block.indent != indent:
+		if not current_block.conditional:
 			error_message = 'Unexpected "else".'
 			return
-		if last_removed_block.fired:
-			last_removed_block.mode = _IfBlock.Mode.REMOVE
-			_if_block_stack.append(last_removed_block)
+		if current_block.fired:
+			current_block.state = _Trilean.FALSE
 			return
-		match last_removed_block.mode:
-			_IfBlock.Mode.NORMAL:
-				_append(indent + string)
-			_IfBlock.Mode.DEDENT:
-				last_removed_block.mode = _IfBlock.Mode.REMOVE
-			_IfBlock.Mode.REMOVE:
-				last_removed_block.mode = _IfBlock.Mode.DEDENT
-		last_removed_block.consumed = false
-		_if_block_stack.append(last_removed_block)
+		current_block.state = _trilean_not(current_block.state)
+		match current_block.state:
+			_Trilean.TRUE:
+				if current_block.if_outputed:
+					_append(current_block.output_indent, "else:\n")
+					current_block.state = _Trilean.UNKNOWN
+				current_block.fired = true
+				current_block.all_consumed = false
+			_Trilean.FALSE:
+				pass
+			_Trilean.UNKNOWN:
+				if current_block.if_consumed:
+					current_block.state = _Trilean.TRUE
+					current_block.if_consumed = false
+				else:
+					_append(current_block.output_indent, string)
+				current_block.all_consumed = false
 	else:
-		if last_removed_block and last_removed_block.consumed:
-			_append(last_removed_block.indent + "pass\n")
-
-		if _if_block_stack.is_empty():
-			_append(indent + string)
-		else:
-			var block: _IfBlock = _if_block_stack.back()
-			match block.mode:
-				_IfBlock.Mode.NORMAL:
-					_append(indent + string)
-				_IfBlock.Mode.DEDENT:
-					_append(indent.trim_prefix(block.indent) + string)
-				_IfBlock.Mode.REMOVE:
-					pass
+		current_block.conditional = false
+		current_block.state = current_block.parent_state
+		current_block.fired = false
+		current_block.if_outputed = false
+		current_block.if_consumed = false
+		current_block.all_consumed = false
+		if current_block.state != _Trilean.FALSE:
+			_append(current_block.output_indent, string)
 
 
 func _parse_string() -> void:
@@ -335,12 +353,12 @@ func _get_substr(from: int) -> String:
 	return _source.substr(from, _position - from)
 
 
-func _append(string: String) -> void:
+func _append(indent_level: int, string: String) -> void:
 	if (_if_directive_stack.is_empty() or _if_directive_stack.back() == true):
-		result += string
+		result += "\t".repeat(indent_level) + string
 
 
-func _eval_cond(cond: String) -> _EvalResult:
+func _eval_cond(cond: String) -> _Trilean:
 	cond = cond.replace("Engine.is_editor_hint()", "false") \
 			.replace("OS.is_debug_build()", "true" if is_debug else "false")
 
@@ -351,9 +369,24 @@ func _eval_cond(cond: String) -> _EvalResult:
 				+ cond.substr(m.get_end())
 
 	if _cond_regex.search(cond) == null:
-		return _EvalResult.UNKNOWN
+		return _Trilean.UNKNOWN
 
 	if _expression.parse(cond) != OK:
-		return _EvalResult.ERROR
+		printerr("Failed to evalute expression.")
+		return _Trilean.UNKNOWN
 
-	return _EvalResult.TRUE if _expression.execute() else _EvalResult.FALSE
+	return _Trilean.TRUE if _expression.execute() else _Trilean.FALSE
+
+
+func _trilean_not(a: _Trilean) -> _Trilean:
+	if a == _Trilean.TRUE:
+		return _Trilean.FALSE
+	if a == _Trilean.FALSE:
+		return _Trilean.TRUE
+	return _Trilean.UNKNOWN
+
+
+func _trilean_and_b(a: _Trilean, b: _Trilean) -> _Trilean:
+	if a == _Trilean.FALSE or b == _Trilean.FALSE:
+		return _Trilean.FALSE
+	return b
