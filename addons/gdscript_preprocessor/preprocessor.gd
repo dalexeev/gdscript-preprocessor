@@ -6,13 +6,12 @@ enum _Trilean { TRUE, FALSE, UNKNOWN }
 class _Block extends RefCounted:
 	var source_indent: int
 	var output_indent: int
+	var empty: bool
 	var conditional: bool # true - "if"/"elif"/"else", false - other.
-	var parent_state := _Trilean.UNKNOWN
 	var state := _Trilean.UNKNOWN
 	var fired: bool # TRUE branch was found. Next "elif"/"else" blocks must be removed.
 	var if_outputed: bool # "if" was outputed (some "if"/"elif" was UNKNOWN).
 	var if_consumed: bool # Replace next non-FALSE "elif" with "if" or unwrap "else".
-	var all_consumed: bool # All branches was removed, a "pass" is needed.
 
 const _TAB = 0x0009 # "\t"
 const _NEWLINE = 0x000A # "\n"
@@ -47,13 +46,14 @@ var _position: int
 var _line: int
 
 var _indent_char: int
+var _root_parent: _Block # A fake parent of root.
 var _paren_stack: Array[int]
 var _block_stack: Array[_Block]
 var _if_directive_stack: Array[bool]
 
 var _os_has_feature_regex := RegEx.create_from_string("OS\\.has_feature\\(([\"'])(\\w+)\\1\\)")
 var _cond_regex := RegEx.create_from_string(
-		"^(false|true|and|or|not|&&|\\|\\||!|\\(|\\)| |\\t|\\n)+$")
+		"^(false|true|and|or|not|&&|\\|\\||!|\\(|\\)| |\\t|\\r|\\n)+$")
 var _expression := Expression.new()
 
 
@@ -68,6 +68,7 @@ func preprocess(source_code: String) -> bool:
 	_line = 1
 
 	_indent_char = 0
+	_root_parent = _Block.new()
 	_paren_stack.clear()
 	_block_stack.clear()
 	_block_stack.push_back(_Block.new())
@@ -90,13 +91,13 @@ func preprocess(source_code: String) -> bool:
 		error_message = "Unclosed directive."
 		return false
 
-	var last_consumed_block: _Block = null
+	var last_empty_block: _Block = null
 	while _block_stack.back().source_indent > 0:
 		var block: _Block = _block_stack.pop_back()
-		if block.all_consumed:
-			last_consumed_block = block
-	if last_consumed_block:
-		_append(last_consumed_block.output_indent, "pass\n")
+		if block.empty:
+			last_empty_block = block
+	if last_empty_block and last_empty_block.state == _Trilean.UNKNOWN:
+		_append(last_empty_block.output_indent + 1, "pass")
 
 	return true
 
@@ -187,12 +188,13 @@ func _parse_statement() -> void:
 		else:
 			_advance()
 
-	string += _get_substr(from)
+	string = (string + _get_substr(from)).strip_edges()
 
-	if string.strip_edges().is_empty():
+	if string.is_empty():
 		return
 
 	var current_block: _Block = _block_stack.back()
+
 	if indent_level > current_block.source_indent:
 		var block := _Block.new()
 		block.source_indent = indent_level
@@ -200,38 +202,43 @@ func _parse_statement() -> void:
 			block.output_indent = current_block.output_indent
 		else:
 			block.output_indent = current_block.output_indent + 1
-		block.parent_state = current_block.state
-		block.all_consumed = true # Until we prove otherwise.
 		current_block = block
 		_block_stack.push_back(block)
 	elif indent_level < current_block.source_indent:
-		var last_consumed_block: _Block = null
+		var last_empty_block: _Block = null
 		while indent_level < _block_stack.back().source_indent:
 			var block: _Block = _block_stack.pop_back()
-			if block.all_consumed:
-				last_consumed_block = block
-		if last_consumed_block:
-			_append(last_consumed_block.output_indent, "pass\n")
+			if block.empty:
+				last_empty_block = block
 		current_block = _block_stack.back()
+		if current_block.empty:
+			last_empty_block = current_block
+		if last_empty_block and last_empty_block.state == _Trilean.UNKNOWN:
+			_append(last_empty_block.output_indent + 1, "pass")
+
+	var parent_block: _Block
+	if _block_stack.size() > 1:
+		parent_block = _block_stack[-2]
+	else:
+		parent_block = _root_parent
 
 	if string.begins_with("if "):
-		var state := _eval_cond(string.trim_prefix("if ").strip_edges().trim_suffix(":")
-				.replace("\\\n", "\n"))
+		var state := _eval_cond(string.trim_prefix("if ").trim_suffix(":").replace("\\\n", "\n"))
+		current_block.empty = true # Until we prove otherwise.
 		current_block.conditional = true
-		current_block.state = _trilean_and_b(current_block.parent_state, state)
+		current_block.state = _trilean_and_b(parent_block.state, state)
 		current_block.fired = false
 		current_block.if_outputed = false
 		current_block.if_consumed = false
 		match current_block.state:
 			_Trilean.TRUE:
 				current_block.fired = true
-				current_block.all_consumed = false
 			_Trilean.FALSE:
 				current_block.if_consumed = true
 			_Trilean.UNKNOWN:
-				_append(current_block.output_indent, string)
+				parent_block.empty = false
 				current_block.if_outputed = true
-				current_block.all_consumed = false
+				_append(current_block.output_indent, string)
 	elif string.begins_with("elif "):
 		if not current_block.conditional:
 			error_message = 'Unexpected "elif".'
@@ -239,26 +246,25 @@ func _parse_statement() -> void:
 		if current_block.fired:
 			current_block.state = _Trilean.FALSE
 			return
-		var state := _eval_cond(string.trim_prefix("elif ").strip_edges().trim_suffix(":")
-				.replace("\\\n", "\n"))
-		current_block.state = _trilean_and_b(current_block.parent_state, state)
+		var state := _eval_cond(string.trim_prefix("elif ").trim_suffix(":").replace("\\\n", "\n"))
+		current_block.empty = true # Until we prove otherwise.
+		current_block.state = _trilean_and_b(parent_block.state, state)
 		match current_block.state:
 			_Trilean.TRUE:
 				if current_block.if_outputed:
-					_append(current_block.output_indent, "else:\n")
 					current_block.state = _Trilean.UNKNOWN
+					_append(current_block.output_indent, "else:")
 				current_block.fired = true
-				current_block.all_consumed = false
 			_Trilean.FALSE:
 				pass
 			_Trilean.UNKNOWN:
+				parent_block.empty = false
 				if current_block.if_consumed:
-					_append(current_block.output_indent, string.trim_prefix("el"))
 					current_block.if_outputed = true
 					current_block.if_consumed = false
+					_append(current_block.output_indent, string.trim_prefix("el"))
 				else:
 					_append(current_block.output_indent, string)
-				current_block.all_consumed = false
 	elif string.begins_with("else:"):
 		if not current_block.conditional:
 			error_message = 'Unexpected "else".'
@@ -266,30 +272,31 @@ func _parse_statement() -> void:
 		if current_block.fired:
 			current_block.state = _Trilean.FALSE
 			return
+		current_block.empty = true # Until we prove otherwise.
 		current_block.state = _trilean_not(current_block.state)
 		match current_block.state:
 			_Trilean.TRUE:
 				if current_block.if_outputed:
-					_append(current_block.output_indent, "else:\n")
 					current_block.state = _Trilean.UNKNOWN
+					_append(current_block.output_indent, "else:")
 				current_block.fired = true
-				current_block.all_consumed = false
 			_Trilean.FALSE:
 				pass
 			_Trilean.UNKNOWN:
+				parent_block.empty = false
 				if current_block.if_consumed:
 					current_block.state = _Trilean.TRUE
 					current_block.if_consumed = false
 				else:
 					_append(current_block.output_indent, string)
-				current_block.all_consumed = false
 	else:
+		parent_block.empty = false
+		current_block.empty = false # Let's think so.
 		current_block.conditional = false
-		current_block.state = current_block.parent_state
+		current_block.state = parent_block.state
 		current_block.fired = false
 		current_block.if_outputed = false
 		current_block.if_consumed = false
-		current_block.all_consumed = false
 		if current_block.state != _Trilean.FALSE:
 			_append(current_block.output_indent, string)
 
@@ -355,7 +362,7 @@ func _get_substr(from: int) -> String:
 
 func _append(indent_level: int, string: String) -> void:
 	if (_if_directive_stack.is_empty() or _if_directive_stack.back() == true):
-		result += "\t".repeat(indent_level) + string
+		result += "\t".repeat(indent_level) + string + "\n"
 
 
 func _eval_cond(cond: String) -> _Trilean:

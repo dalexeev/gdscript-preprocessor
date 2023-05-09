@@ -1,0 +1,29 @@
+name: Test Preprocessor
+on: [push, pull_request]
+
+jobs:
+  test-preprocessor:
+    name: Test Preprocessor
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Cache Godot
+        id: cache-godot
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-godot
+        with:
+          path: ./Godot_v4.0.2-stable_linux.x86_64
+          key: ${{ runner.os }}-${{ env.cache-name }}
+
+      - if: ${{ steps.cache-godot.outputs.cache-hit != 'true' }}
+        name: Install Godot
+        run: |
+          wget https://downloads.tuxfamily.org/godotengine/4.0.2/Godot_v4.0.2-stable_linux.x86_64.zip
+          unzip Godot_v4.0.2-stable_linux.x86_64.zip
+
+      - name: Run tests
+        run: |
+          ./Godot_v4.0.2-stable_linux.x86_64 --headless -s test_runner.gd

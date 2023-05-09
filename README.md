@@ -2,8 +2,6 @@
 
 An export plugin for stripping comments and "conditional compilation" of GDScript.
 
-**Warning: This plugin has not been tested, use with caution.**
-
 ### How to use
 
 1. Copy the `addons/gdscript_preprocessor` folder to your project.
@@ -72,7 +70,7 @@ extends Node
 var a := 1
 var c := 3
 func _ready() -> void:
-    print(1) 
+    print(1)
     print("Release.")
     print(2)
 ```
@@ -85,7 +83,7 @@ var a := 1
 var b := 2
 var c := 3
 func _ready() -> void:
-    print(1) 
+    print(1)
     print("Debug: b = ", b)
     print(2)
 ```

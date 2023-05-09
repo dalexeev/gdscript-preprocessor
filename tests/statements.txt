@@ -1,0 +1,42 @@
+OK
+extends Node
+func _ready() -> void:
+	print("=== BASIC USAGE ===")
+	print("basic usage - debug")
+	print("basic usage - more debug")
+	print("=== BASIC USAGE INVERTED ===")
+	print("basic usage inverted - debug")
+	print("basic usage inverted - more debug")
+	print("=== NESTED TRUE ===")
+	if randi():
+		print("nested true - 1")
+		print("nested true - 2")
+		print("nested true - 3")
+	print("=== NESTED FALSE ===")
+	if randi():
+		print("nested false - 1")
+		print("nested false - 3")
+	print("=== NESTED UNKNOWN ===")
+	print("nested unknown - 1")
+	if randi():
+		print("nested unknown - 2")
+	print("nested unknown - 3")
+	print("=== CONSUMED BLOCKS ===")
+	if randi():
+		print("consumed blocks - 1")
+	if randi():
+		pass
+	print("=== TRUE IF ===")
+	print("true if - 1")
+	print("=== FALSE IF ===")
+	if randi():
+		print("false if - 2")
+	else:
+		print("false if - 4")
+	print("=== UNKNOWN IF ===")
+	if randi():
+		print("unknown if - 1")
+	elif randi():
+		print("unknown if - 2")
+	else:
+		print("unknown if - 4")

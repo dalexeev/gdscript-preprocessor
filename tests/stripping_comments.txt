@@ -1,0 +1,14 @@
+OK
+extends Node
+"Strings are NOT stripped!"
+"""
+Strings are NOT stripped!
+"""
+func _ready() -> void:
+	print("test")
+	print(
+		
+		"a", 
+		"b",
+		"c",
+	)
