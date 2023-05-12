@@ -1,4 +1,4 @@
-# PARAMS: features=pc,s3tc,linux,bptc,x86_64,template,debug,template_debug is_debug=true
+# PARAMS: features=pc,s3tc,linuxbsd,bptc,x86_64,template,debug,template_debug is_debug=true
 
 var a1 := 1
 
@@ -10,9 +10,9 @@ var a2 := 2
 var a3 := 3
 #~endif # non_existent
 
-#~if OS.has_feature("linux")
+#~if OS.has_feature("linuxbsd")
 var a4 := 4
-#~endif # linux
+#~endif # linuxbsd
 
 #~endif # debug
 
@@ -25,13 +25,13 @@ var a7 := 7
 #~endif # debug
 #~endif # non_existent
 
-#~if OS.has_feature("non_existent") or OS.has_feature("linux")
+#~if OS.has_feature("non_existent") or OS.has_feature("linuxbsd")
 var a8 := 8
-#~endif # non_existent or linux
+#~endif # non_existent or linuxbsd
 
-#~if OS.has_feature("non_existent") and OS.has_feature("linux")
+#~if OS.has_feature("non_existent") and OS.has_feature("linuxbsd")
 var a9 := 9
-#~endif # non_existent and linux
+#~endif # non_existent and linuxbsd
 
 #~if OS.is_debug_build()
 var a10 := 10

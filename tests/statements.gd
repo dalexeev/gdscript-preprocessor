@@ -1,4 +1,4 @@
-# PARAMS: features=pc,s3tc,linux,bptc,x86_64,template,debug,template_debug is_debug=true
+# PARAMS: features=pc,s3tc,linuxbsd,bptc,x86_64,template,debug,template_debug is_debug=true
 
 extends Node
 

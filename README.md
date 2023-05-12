@@ -17,6 +17,16 @@ The following errors do not affect the export success:
     editor/export/editor_export_platform.cpp:776 - Condition "res.is_null()" is true. Returning: p_path
 ```
 
+### Important note
+
+See [godotengine/godot#76990](https://github.com/godotengine/godot/issues/76990) and [godotengine/godot#76996](https://github.com/godotengine/godot/pull/76996).
+
+Each supported platform has certain standard feature tags (plus any custom tags you specify in the export preset). However, there are some standard tags that are not known in advance.
+
+For example, the `linuxbsd` tag corresponds to the LinuxBSD _platform_. But the exported project, in theory, can be run not only on Linux, but also on BSD. Thus, it is not known in advance whether the environment will have the `linux` or `bsd` feature tag.
+
+If you want separate exports for these OSes, you can have separate presets for Linux and BSD, just add the `linux` and `bsd` tags respectively as **custom tags**. ~~If you don't care about this difference, then you should use the `linuxbsd` tag, not `linux`.~~ _(This is not true until [godotengine/godot#76996](https://github.com/godotengine/godot/pull/76996) is merged.)_
+
 ### Features
 
 * Stripping comments.
