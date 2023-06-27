@@ -1,6 +1,9 @@
 name: Test Preprocessor
 on: [push, pull_request]
 
+env:
+  GODOT_EXECUTABLE: Godot_v${{ vars.GODOT_VERSION }}-stable_linux.x86_64
+
 jobs:
   test-preprocessor:
     name: Test Preprocessor
@@ -15,15 +18,15 @@ jobs:
         env:
           cache-name: cache-godot
         with:
-          path: ./Godot_v4.0.2-stable_linux.x86_64
-          key: ${{ runner.os }}-${{ env.cache-name }}
+          path: ./${{ env.GODOT_EXECUTABLE }}
+          key: ${{ runner.os }}-${{ env.cache-name }}-${{ vars.GODOT_VERSION }}
 
       - if: ${{ steps.cache-godot.outputs.cache-hit != 'true' }}
         name: Install Godot
         run: |
-          wget https://downloads.tuxfamily.org/godotengine/4.0.2/Godot_v4.0.2-stable_linux.x86_64.zip
-          unzip Godot_v4.0.2-stable_linux.x86_64.zip
+          wget https://downloads.tuxfamily.org/godotengine/${{ vars.GODOT_VERSION }}/${{ env.GODOT_EXECUTABLE }}.zip
+          unzip ${{ env.GODOT_EXECUTABLE }}.zip
 
       - name: Run tests
         run: |
-          ./Godot_v4.0.2-stable_linux.x86_64 --headless -s test_runner.gd
+          ./${{ env.GODOT_EXECUTABLE }} --headless -s test_runner.gd
