@@ -2,7 +2,7 @@ name: Test Preprocessor
 on: [push, pull_request]
 
 env:
-  GODOT_EXECUTABLE: Godot_v${{ vars.GODOT_VERSION }}-stable_linux.x86_64
+  GODOT_EXECUTABLE: Godot_v${{ vars.GODOT_VERSION }}_linux.x86_64
 
 jobs:
   test-preprocessor:
@@ -24,7 +24,7 @@ jobs:
       - if: ${{ steps.cache-godot.outputs.cache-hit != 'true' }}
         name: Install Godot
         run: |
-          wget https://downloads.tuxfamily.org/godotengine/${{ vars.GODOT_VERSION }}/${{ env.GODOT_EXECUTABLE }}.zip
+          wget https://github.com/godotengine/godot-builds/releases/download/${{ vars.GODOT_VERSION }}/${{ env.GODOT_EXECUTABLE }}.zip
           unzip ${{ env.GODOT_EXECUTABLE }}.zip
 
       - name: Run tests

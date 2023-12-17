@@ -1,0 +1,6 @@
+; Copy this file as `options.cfg` if you want to change the settings.
+
+[statements]
+
+removing_regex_debug=""
+removing_regex_release="^(?:breakpoint|assert\\(|print_debug\\(|print_stack\\()"

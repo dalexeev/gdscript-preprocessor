@@ -1,7 +1,7 @@
 OK
-var a1 := 1
-var a2 := 2
-var a4 := 4
-var a5 := 5
-var a8 := 8
-var a10 := 10
+var a1: int
+var a2: int
+var a4: int
+var a5: int
+var a8: int
+var a10: int

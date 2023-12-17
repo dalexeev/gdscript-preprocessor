@@ -1,42 +1,43 @@
-# PARAMS: features=pc,s3tc,linuxbsd,bptc,x86_64,template,debug,template_debug is_debug=true
+# features=pc,s3tc,linux,bptc,x86_64,template,debug,template_debug
+# is_debug=true
 
-var a1 := 1
+var a1: int
 
 #~if OS.has_feature("debug")
 
-var a2 := 2
+var a2: int
 
 #~if OS.has_feature("non_existent")
-var a3 := 3
+var a3: int
 #~endif # non_existent
 
-#~if OS.has_feature("linuxbsd")
-var a4 := 4
-#~endif # linuxbsd
+#~if OS.has_feature("linux")
+var a4: int
+#~endif # linux
 
 #~endif # debug
 
-var a5 := 5
+var a5: int
 
 #~if OS.has_feature("non_existent")
-var a6 := 6
+var a6: int
 #~if OS.has_feature("debug")
-var a7 := 7
+var a7: int
 #~endif # debug
 #~endif # non_existent
 
-#~if OS.has_feature("non_existent") or OS.has_feature("linuxbsd")
-var a8 := 8
-#~endif # non_existent or linuxbsd
+#~if OS.has_feature("non_existent") or OS.has_feature("linux")
+var a8: int
+#~endif # non_existent or linux
 
-#~if OS.has_feature("non_existent") and OS.has_feature("linuxbsd")
-var a9 := 9
-#~endif # non_existent and linuxbsd
+#~if OS.has_feature("non_existent") and OS.has_feature("linux")
+var a9: int
+#~endif # non_existent and linux
 
 #~if OS.is_debug_build()
-var a10 := 10
+var a10: int
 #~endif
 
 #~if Engine.is_editor_hint()
-var a11 := 11
+var a11: int
 #~endif

@@ -2,7 +2,10 @@
 extends EditorPlugin
 
 
-var _export_plugin := preload("export_plugin.gd").new()
+@warning_ignore("inferred_declaration")
+const _ExportPlugin = preload("./export_plugin.gd")
+
+var _export_plugin: _ExportPlugin = _ExportPlugin.new()
 
 
 func _enter_tree() -> void:

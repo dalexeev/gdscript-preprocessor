@@ -1,9 +1,7 @@
-# PARAMS: features=pc,s3tc,linuxbsd,bptc,x86_64,template,debug,template_debug is_debug=true
+# features=pc,s3tc,linux,bptc,x86_64,template,debug,template_debug
+# is_debug=true
 
-extends Node
-
-
-func _ready() -> void:
+func test() -> void:
 	print("=== BASIC USAGE ===")
 	if OS.is_debug_build():
 		print("basic usage - debug")
@@ -39,18 +37,25 @@ func _ready() -> void:
 			print("nested unknown - 2")
 		print("nested unknown - 3")
 
-	print("=== CONSUMED BLOCKS ===")
+	print("=== CONSUMED FALSE BLOCKS ===")
 	if randi():
-		print("consumed blocks - 1")
+		print("consumed false blocks - 1")
 		if false:
 			if false:
-				if false:
-					print("consumed blocks - 2")
+				if true:
+					print("consumed false blocks - 2")
 	if randi():
 		if false:
 			if false:
-				if false:
-					print("consumed blocks - 3")
+				if true:
+					print("consumed false blocks - 3")
+
+	print("=== NON-CONSUMED TRUE BLOCKS ===")
+	if true:
+		if true:
+			if true:
+				if true:
+					pass
 
 	print("=== TRUE IF ===")
 	if true:
@@ -87,3 +92,7 @@ func _ready() -> void:
 		print("unknown if - 4")
 	else:
 		print("unknown if - 5")
+
+func test_body_consumed() -> void:
+	if false:
+		print("empty")

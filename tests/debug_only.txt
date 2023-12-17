@@ -1,0 +1,4 @@
+OK
+func test() -> void:
+	print(1)
+	print(2)

@@ -1,10 +1,9 @@
 OK
-extends Node
 "Strings are NOT stripped!"
 """
 Strings are NOT stripped!
 """
-func _ready() -> void:
+func test() -> void:
 	print("test")
 	print(
 		
