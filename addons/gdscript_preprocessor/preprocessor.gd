@@ -59,6 +59,7 @@ var _indent_size: int
 var _root_parent: _Block # A fake parent of root.
 var _block_stack: Array[_Block]
 var _if_directive_stack: Array[bool]
+var _output_enabled: bool = true
 var _paren_stack: Array[int]
 
 var _os_has_feature_regex: RegEx = RegEx.create_from_string(
@@ -86,6 +87,7 @@ func preprocess(source_code: String) -> bool:
 	_block_stack.clear()
 	_block_stack.push_back(_Block.new())
 	_if_directive_stack.clear()
+	_output_enabled = true
 	_paren_stack.clear()
 
 	while _position < _length:
@@ -122,18 +124,17 @@ func _parse_comment_line() -> void:
 		_position += 1
 	var line: String = _source.substr(from, _position - from)
 
-	if not line.begins_with("#~"): # Normal comment.
-		return
+	if line.begins_with("#~"):
+		if line.begins_with("#~if "):
+			_parse_if_directive(line.trim_prefix("#~if "))
+		elif line == "#~endif" or line.begins_with("#~endif "): # Allow comment.
+			_parse_endif_directive()
+		else:
+			error_message = 'Unknown or invalid directive "%s".' % line
 
-	if line.begins_with("#~if "):
-		_parse_if_directive(line.trim_prefix("#~if "))
-	elif line == "#~endif" or line.begins_with("#~endif "): # Allow comment.
-		_parse_endif_directive()
-	else:
-		error_message = 'Unknown or invalid directive "%s".' % line
-
-	_position += 1 # Consume newline.
-	_line += 1
+	if _position < _length and _source.unicode_at(_position) == _NEWLINE:
+		_position += 1
+		_line += 1
 
 
 func _parse_if_directive(cond: String) -> void:
@@ -142,9 +143,10 @@ func _parse_if_directive(cond: String) -> void:
 		error_message = 'Invalid condition for directive "#~if".'
 		return
 	var state: bool = res == _Trilean.TRUE
-	if not _if_directive_stack.is_empty() and _if_directive_stack.back() == false:
+	if not _if_directive_stack.is_empty() and not _if_directive_stack.back():
 		state = false
 	_if_directive_stack.push_back(state)
+	_output_enabled = state
 
 
 func _parse_endif_directive() -> void:
@@ -152,6 +154,7 @@ func _parse_endif_directive() -> void:
 		error_message = '"#~endif" does not have an opening counterpart.'
 		return
 	_if_directive_stack.pop_back()
+	_output_enabled = _if_directive_stack.is_empty() or _if_directive_stack.back()
 
 
 func _parse_statement() -> void:
@@ -308,16 +311,17 @@ func _parse_statement() -> void:
 					_append(current_block.indent, "else:")
 				current_block.status = _Status.FINISHED
 	else:
-		if statement_removing_regex and statement_removing_regex.search(string):
+		if parent_block.state == _Trilean.FALSE or (statement_removing_regex
+				and statement_removing_regex.search(string)):
+			current_block.state = _Trilean.FALSE
 			return
+		_append(current_block.indent, string)
+		parent_block.empty = false
 		# Let's assume it's not a block (`func`, `if`, `for`, `while`, etc.).
 		# Otherwise it will be corrected when allocating a nested block.
 		current_block.empty = false
 		current_block.state = parent_block.state
 		current_block.status = _Status.NORMAL
-		if current_block.state != _Trilean.FALSE:
-			_append(current_block.indent, string)
-			parent_block.empty = false
 
 
 func _parse_string(is_raw: bool) -> void:
@@ -367,7 +371,7 @@ func _parse_string(is_raw: bool) -> void:
 
 
 func _append(indent_level: int, string: String) -> void:
-	if (_if_directive_stack.is_empty() or _if_directive_stack.back() == true):
+	if _output_enabled:
 		result += _indent_char_str.repeat(indent_level) + string + "\n"
 
 

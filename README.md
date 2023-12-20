@@ -2,7 +2,9 @@
 
 An export plugin for stripping comments and "conditional compilation" of GDScript.
 
-### How to use
+Compatible with Godot 4.2.
+
+## How to use
 
 1. Copy the `addons/gdscript_preprocessor` folder to your project.
 2. Enable the plugin in the Project Settings.
@@ -10,11 +12,11 @@ An export plugin for stripping comments and "conditional compilation" of GDScrip
 4. The original scripts will not be changed, but in PCK/ZIP the scripts will be changed. Use ZIP to check the changes.
 5. If any errors occurred during the export, you will see them in the Output Log.
 
-### Important note
+## Important note
 
 Each supported platform has certain standard feature tags (plus any custom tags you specify in the export preset). However, there are some standard tags that are not known in advance. See [godotengine/godot#76990](https://github.com/godotengine/godot/issues/76990) and [godotengine/godot#76996](https://github.com/godotengine/godot/pull/76996) for details.
 
-### Features
+## Features
 
 * Stripping comments.
 * Conditional compilation directives (`#~if` and `#~endif`). They work only when exporting a project, and have no effect in the editor.
@@ -29,14 +31,14 @@ Each supported platform has certain standard feature tags (plus any custom tags 
   * `print_stack()`;
   * also you can specify custom regexes in `addons/gdscript_preprocessor/options.cfg`.
 
-### Limitations
+## Limitations
 
 * Built-in scripts are not properly supported yet.
 * Multiple statements on the same line (`if Engine.is_editor_hint(): return`) are not recognized.
 * Statements inside lambdas are not processed.
 * Your code is expected to follow the [GDScript style guide](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html). Otherwise, regular expressions and string processing used in the plugin may not work.
 
-### Example
+## Example
 
 Original script:
 
@@ -53,11 +55,11 @@ var c: int
 
 ## Comment.
 func _ready() -> void:
-    print(1) # Comment.
+    # Comment.
+    print(1)
     if OS.has_feature("debug"):
         var t: int = a + b
         print("Debug: t = ", t)
-    # Comment.
     elif OS.has_feature("release"):
         print("Release.")
     else:

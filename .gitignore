@@ -1,2 +1,4 @@
 .godot/
 export_presets.cfg
+
+addons/gdscript_preprocessor/options.cfg

@@ -24,7 +24,7 @@ jobs:
       - if: ${{ steps.cache-godot.outputs.cache-hit != 'true' }}
         name: Install Godot
         run: |
-          wget https://github.com/godotengine/godot-builds/releases/download/${{ vars.GODOT_VERSION }}/${{ env.GODOT_EXECUTABLE }}.zip
+          wget -q https://github.com/godotengine/godot-builds/releases/download/${{ vars.GODOT_VERSION }}/${{ env.GODOT_EXECUTABLE }}.zip
           unzip ${{ env.GODOT_EXECUTABLE }}.zip
 
       - name: Run tests

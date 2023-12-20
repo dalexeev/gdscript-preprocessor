@@ -5,9 +5,9 @@ extends EditorExportPlugin
 const _Preprocessor = preload("./preprocessor.gd")
 
 var _config_path: String
+var _preprocessor: _Preprocessor = _Preprocessor.new()
 var _platform: EditorExportPlatform
 var _features: PackedStringArray
-var _preprocessor: _Preprocessor = _Preprocessor.new()
 
 
 func _init() -> void:
@@ -26,9 +26,9 @@ func _export_begin(
 		_path: String,
 		_flags: int,
 ) -> void:
-	_features = features
 	_preprocessor.features = features
 	_preprocessor.is_debug = is_debug
+	_preprocessor.statement_removing_regex = null
 
 	var regex: String
 	var config: ConfigFile = ConfigFile.new()
@@ -51,8 +51,9 @@ func _begin_customize_resources(
 		platform: EditorExportPlatform,
 		features: PackedStringArray,
 ) -> bool:
+	assert(features == _preprocessor.features)
 	_platform = platform
-	assert(_features == features)
+	_features = features
 	return true
 
 
@@ -61,14 +62,14 @@ func _get_customization_configuration_hash() -> int:
 
 
 func _customize_resource(resource: Resource, path: String) -> Resource:
-	var gds: GDScript = resource as GDScript
-	if not gds:
+	var gdscript: GDScript = resource as GDScript
+	if not gdscript:
 		return null
 
-	if _preprocessor.preprocess(gds.source_code):
-		var new_gds: GDScript = GDScript.new()
-		new_gds.source_code = _preprocessor.result
-		return new_gds
+	if _preprocessor.preprocess(gdscript.source_code):
+		var new_gdscript: GDScript = GDScript.new()
+		new_gdscript.source_code = _preprocessor.result
+		return new_gdscript
 	else:
 		printerr("%s:%s - %s" % [
 			"<unknown>" if path.is_empty() else path,
