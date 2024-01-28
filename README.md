@@ -2,7 +2,8 @@
 
 An export plugin for stripping comments and "conditional compilation" of GDScript.
 
-Version: 1.0-dev. Compatible with Godot 4.2.x.
+Version: **1.0-dev**. Compatible with Godot **4.2.x**. Status: should be ready
+for production use. Please report if you find any bugs.
 
 ## How to use
 
@@ -11,15 +12,15 @@ Version: 1.0-dev. Compatible with Godot 4.2.x.
 3. Export the project.
 
 The original scripts will not be changed, but in PCK/ZIP the scripts will be changed.
-Use ZIP to check the changes. If any errors occurred during the export, you will see them
-in the Output Log.
+Use ZIP to check to check the result. If any errors occurred during the export,
+you will see them in the Output Log.
 
 ## Settings
 
 You can change the settings in the Options tab of the Export dialog:
 
 <details>
-<summary>Screenshot<summary>
+<summary>Screenshot</summary>
 
 ![image](screenshots/export_options.png)
 
@@ -44,10 +45,9 @@ You can specify a list of feature tags that will be treated as dynamic in the ex
   * `Engine.is_editor_hint()`;
   * `OS.is_debug_build()`;
   * `OS.has_feature("feature_tag_name")`.
-* Removing statements by regular expression.
-  * With default settings, `assert()`, `breakpoint`, `print_debug()`, and `print_stack()`
-    are removed in release builds.
-  * You can specify custom regexes in the export options.
+* Removing statements by regular expression. With default settings, `assert()`, `breakpoint`,
+  `print_debug()`, and `print_stack()` are removed in release builds. Also, you can specify
+  custom regexes in the export options.
 
 ## Limitations
 
@@ -66,11 +66,13 @@ Original script:
 ```gdscript
 extends Node
 
+
 var a: int
 #~if OS.has_feature("debug")
 var b: int
 #~endif
 var c: int
+
 
 ## Comment.
 func _ready() -> void:
