@@ -26,6 +26,7 @@ const _HASH:          int = 0x0023 # "#"
 const _APOS:          int = 0x0027 # "'"
 const _PAREN_OPEN:    int = 0x0028 # "("
 const _PAREN_CLOSE:   int = 0x0029 # ")"
+const _COLON:         int = 0x003A # ":"
 const _BRACKET_OPEN:  int = 0x005B # "["
 const _BACKSLASH:     int = 0x005C # "\\"
 const _BRACKET_CLOSE: int = 0x005D # "]"
@@ -47,6 +48,8 @@ var result: String
 var error_message: String
 var error_line: int
 
+var _dynamic_feature_tags: Dictionary
+
 var _source: String
 var _length: int
 var _position: int
@@ -64,9 +67,15 @@ var _paren_stack: Array[int]
 
 var _os_has_feature_regex: RegEx = RegEx.create_from_string(
 		r"""OS\.has_feature\((["'])(\w+)\1\)""")
-var _cond_regex: RegEx = RegEx.create_from_string(
+var _condition_regex: RegEx = RegEx.create_from_string(
 		r"^(false|true|and|or|not|&&|\|\||!|\(|\)| |\t|\r|\n)+$")
 var _expression: Expression = Expression.new()
+
+
+func set_dynamic_feature_tags(tags: PackedStringArray) -> void:
+	_dynamic_feature_tags.clear()
+	for tag: String in tags:
+		_dynamic_feature_tags[tag] = true
 
 
 func preprocess(source_code: String) -> bool:
@@ -92,12 +101,13 @@ func preprocess(source_code: String) -> bool:
 
 	while _position < _length:
 		if _source.unicode_at(_position) == _HASH:
-			_parse_comment_line()
+			if not _parse_comment_line():
+				error_line = _line
+				return false
 		else:
-			_parse_statement()
-		if not error_message.is_empty():
-			error_line = _line
-			return false
+			if not _parse_statement():
+				error_line = _line
+				return false
 
 	if not _paren_stack.is_empty():
 		error_message = 'Unclosed "%c".' % _paren_stack.back()
@@ -118,7 +128,7 @@ func preprocess(source_code: String) -> bool:
 	return true
 
 
-func _parse_comment_line() -> void:
+func _parse_comment_line() -> bool:
 	var from: int = _position
 	while _position < _length and _source.unicode_at(_position) != _NEWLINE:
 		_position += 1
@@ -126,38 +136,45 @@ func _parse_comment_line() -> void:
 
 	if line.begins_with("#~"):
 		if line.begins_with("#~if "):
-			_parse_if_directive(line.trim_prefix("#~if "))
+			if not _parse_if_directive(line.substr(len("#~if "))):
+				return false
 		elif line == "#~endif" or line.begins_with("#~endif "): # Allow comment.
-			_parse_endif_directive()
+			if not _parse_endif_directive():
+				return false
 		else:
 			error_message = 'Unknown or invalid directive "%s".' % line
+			return false
 
 	if _position < _length and _source.unicode_at(_position) == _NEWLINE:
 		_position += 1
 		_line += 1
 
+	return true
 
-func _parse_if_directive(cond: String) -> void:
-	var res: _Trilean = _eval_cond(cond)
+
+func _parse_if_directive(condition: String) -> bool:
+	var res: _Trilean = _evaluate(condition)
 	if res == _Trilean.UNKNOWN:
-		error_message = 'Invalid condition for directive "#~if".'
-		return
+		error_message = 'Invalid or dynamic condition for directive "#~if".'
+		return false
 	var state: bool = res == _Trilean.TRUE
 	if not _if_directive_stack.is_empty() and not _if_directive_stack.back():
 		state = false
 	_if_directive_stack.push_back(state)
 	_output_enabled = state
+	return true
 
 
-func _parse_endif_directive() -> void:
+func _parse_endif_directive() -> bool:
 	if _if_directive_stack.is_empty():
 		error_message = '"#~endif" does not have an opening counterpart.'
-		return
+		return false
 	_if_directive_stack.pop_back()
 	_output_enabled = _if_directive_stack.is_empty() or _if_directive_stack.back()
+	return true
 
 
-func _parse_statement() -> void:
+func _parse_statement() -> bool:
 	var indent_level: int = 0
 	if _indent_char:
 		while _source.unicode_at(_position) == _indent_char:
@@ -175,6 +192,7 @@ func _parse_statement() -> void:
 
 	var from: int = _position
 	var string: String = ""
+	var string_colon_pos: int = -1
 
 	while _position < _length:
 		var c: int = _source.unicode_at(_position)
@@ -184,20 +202,24 @@ func _parse_statement() -> void:
 		elif c == _PAREN_CLOSE or c == _BRACKET_CLOSE or c == _BRACE_CLOSE:
 			if _paren_stack.is_empty() or _PARENS[_paren_stack.pop_back()] != c:
 				error_message = '"%c" does not have an opening counterpart.' % c
-				return
+				return false
 			_position += 1
 		elif c == _QUOT or c == _APOS:
-			_parse_string(false)
-			if not error_message.is_empty():
-				return
+			if not _parse_string(false):
+				return false
 		elif c == _SMALL_R:
 			_position += 1
 			if _position < _length:
 				var q: int = _source.unicode_at(_position)
 				if q == _QUOT or q == _APOS:
-					_parse_string(true)
-					if not error_message.is_empty():
-						return
+					if not _parse_string(true):
+						return false
+		elif c == _COLON:
+			if string_colon_pos < 0 and _paren_stack.is_empty():
+				# This doesn't take lambdas into account, but it's unlikely
+				# that anyone would use them in if/elif conditions.
+				string_colon_pos = _position - from
+			_position += 1
 		elif c == _HASH:
 			# Skip comment.
 			string += _source.substr(from, _position - from)
@@ -216,14 +238,14 @@ func _parse_statement() -> void:
 				_line += 1
 			else:
 				error_message = "Expected newline after the backslash."
-				return
+				return false
 		else:
 			_position += 1
 
 	string = (string + _source.substr(from, _position - from)).strip_edges()
 
 	if string.is_empty():
-		return
+		return true
 
 	var current_block: _Block = _block_stack.back()
 
@@ -254,9 +276,10 @@ func _parse_statement() -> void:
 	if string.begins_with("if "):
 		if parent_block.state == _Trilean.FALSE:
 			current_block.state = _Trilean.FALSE
-			return
-		current_block.state = _eval_cond(string.trim_prefix("if ").trim_suffix(":") \
-				.replace("\\\n", "\n"))
+			return true
+
+		var condition: String = string.substr(len("if "), string_colon_pos - len("if "))
+		current_block.state = _evaluate(condition.replace("\\\n", "\n"))
 		match current_block.state:
 			_Trilean.FALSE:
 				current_block.status = _Status.WAITING
@@ -265,56 +288,62 @@ func _parse_statement() -> void:
 				parent_block.empty = false
 				current_block.status = _Status.STARTED
 			_Trilean.TRUE:
-				_append(current_block.indent, "if true:")
+				_append(current_block.indent, "if true:" + string.substr(string_colon_pos + 1))
 				parent_block.empty = false
 				current_block.status = _Status.FINISHED
+
 	elif string.begins_with("elif "):
 		if parent_block.state == _Trilean.FALSE or current_block.status == _Status.FINISHED:
 			current_block.state = _Trilean.FALSE
-			return
-		current_block.state = _eval_cond(string.trim_prefix("elif ").trim_suffix(":") \
-				.replace("\\\n", "\n"))
+			return true
+
+		var condition: String = string.substr(len("elif "), string_colon_pos - len("elif "))
+		current_block.state = _evaluate(condition.replace("\\\n", "\n"))
 		match current_block.state:
 			_Trilean.UNKNOWN:
 				if current_block.status == _Status.WAITING:
-					_append(current_block.indent, string.trim_prefix("el"))
+					_append(current_block.indent, string.substr(len("el")))
 					parent_block.empty = false
 					current_block.status = _Status.STARTED
 				else:
 					_append(current_block.indent, string)
 			_Trilean.TRUE:
 				if current_block.status == _Status.WAITING:
-					_append(current_block.indent, "if true:")
+					_append(current_block.indent, "if true:" + string.substr(string_colon_pos + 1))
 					parent_block.empty = false
 				else:
-					_append(current_block.indent, "else:")
+					_append(current_block.indent, "else:" + string.substr(string_colon_pos + 1))
 				current_block.status = _Status.FINISHED
+
 	elif string.begins_with("else:"):
 		if parent_block.state == _Trilean.FALSE or current_block.status == _Status.FINISHED:
 			current_block.state = _Trilean.FALSE
-			return
+			return true
+
 		@warning_ignore("int_as_enum_without_cast")
 		current_block.state = -current_block.state # Fast trilean NOT.
 		match current_block.state:
 			_Trilean.UNKNOWN:
 				if current_block.status == _Status.WAITING:
-					_append(current_block.indent, "if true:")
+					_append(current_block.indent, "if true:" + string.substr(string_colon_pos + 1))
 					parent_block.empty = false
 					current_block.status = _Status.STARTED
 				else:
-					_append(current_block.indent, "else:")
+					_append(current_block.indent, "else:" + string.substr(string_colon_pos + 1))
 			_Trilean.TRUE:
 				if current_block.status == _Status.WAITING:
-					_append(current_block.indent, "if true:")
+					_append(current_block.indent, "if true:" + string.substr(string_colon_pos + 1))
 					parent_block.empty = false
 				else:
-					_append(current_block.indent, "else:")
+					_append(current_block.indent, "else:" + string.substr(string_colon_pos + 1))
 				current_block.status = _Status.FINISHED
+
 	else:
-		if parent_block.state == _Trilean.FALSE or (statement_removing_regex
-				and statement_removing_regex.search(string)):
+		if parent_block.state == _Trilean.FALSE \
+				or (statement_removing_regex and statement_removing_regex.search(string)):
 			current_block.state = _Trilean.FALSE
-			return
+			return true
+
 		_append(current_block.indent, string)
 		parent_block.empty = false
 		# Let's assume it's not a block (`func`, `if`, `for`, `while`, etc.).
@@ -323,8 +352,10 @@ func _parse_statement() -> void:
 		current_block.state = parent_block.state
 		current_block.status = _Status.NORMAL
 
+	return true
 
-func _parse_string(is_raw: bool) -> void:
+
+func _parse_string(is_raw: bool) -> bool:
 	var quote_char: int = _source.unicode_at(_position)
 	_position += 1
 
@@ -344,7 +375,7 @@ func _parse_string(is_raw: bool) -> void:
 			_position += 1
 			if _position >= _length:
 				error_message = "Unterminated string."
-				return
+				return false
 			var esc: int = _source.unicode_at(_position)
 			if is_raw:
 				if esc == quote_char or esc == _BACKSLASH:
@@ -361,13 +392,14 @@ func _parse_string(is_raw: bool) -> void:
 				if _position + 1 < _length and _source.unicode_at(_position) == quote_char \
 						and _source.unicode_at(_position + 1) == quote_char:
 					_position += 2
-					return
+					return true
 			else:
-				return
+				return true
 		else:
 			_position += 1
 
 	error_message = "Unterminated string."
+	return false
 
 
 func _append(indent_level: int, string: String) -> void:
@@ -375,20 +407,24 @@ func _append(indent_level: int, string: String) -> void:
 		result += _indent_char_str.repeat(indent_level) + string + "\n"
 
 
-func _eval_cond(cond: String) -> _Trilean:
-	cond = cond.replace("Engine.is_editor_hint()", "false") \
+func _evaluate(condition: String) -> _Trilean:
+	condition = condition.replace("Engine.is_editor_hint()", "false") \
 			.replace("OS.is_debug_build()", "true" if is_debug else "false")
 
-	var matches: Array[RegExMatch] = _os_has_feature_regex.search_all(cond)
+	var matches: Array[RegExMatch] = _os_has_feature_regex.search_all(condition)
 	for i: int in range(matches.size() - 1, -1, -1):
-		var m: RegExMatch = matches[i]
-		cond = cond.left(m.get_start()) + ("true" if features.has(m.get_string(2)) else "false") \
-				+ cond.substr(m.get_end())
+		var regex_match: RegExMatch = matches[i]
+		var tag: String = regex_match.get_string(2)
+		if _dynamic_feature_tags.has(tag):
+			return _Trilean.UNKNOWN
+		condition = condition.left(regex_match.get_start()) \
+				+ ("true" if features.has(tag) else "false") \
+				+ condition.substr(regex_match.get_end())
 
-	if _cond_regex.search(cond) == null:
+	if _condition_regex.search(condition) == null:
 		return _Trilean.UNKNOWN
 
-	if _expression.parse(cond) != OK:
+	if _expression.parse(condition) != OK:
 		printerr("Failed to evaluate expression.")
 		return _Trilean.UNKNOWN
 

@@ -1,0 +1,8 @@
+OK
+func test() -> void:
+	if true:
+		print("static_true_tag")
+	if OS.has_feature("dynamic_true_tag"):
+		print("dynamic_true_tag")
+	if OS.has_feature("dynamic_false_tag"):
+		print("dynamic_false_tag")

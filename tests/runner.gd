@@ -2,19 +2,17 @@ extends SceneTree
 
 
 @warning_ignore("inferred_declaration")
-const _Preprocessor = preload("./addons/gdscript_preprocessor/preprocessor.gd")
+const _Preprocessor = preload("../addons/gdscript_preprocessor/preprocessor.gd")
 
 var _preprocessor: _Preprocessor = _Preprocessor.new()
 
 
 func _init() -> void:
-	for file_name: String in DirAccess.get_files_at("tests/"):
-		if not file_name.ends_with(".gd"):
-			continue
-
-		var gd_path: String = "tests/".path_join(file_name)
+	var gd_paths: PackedStringArray = PackedStringArray()
+	_get_gd_paths("tests/", gd_paths, true)
+	for gd_path: String in gd_paths:
 		var gd_file: FileAccess = FileAccess.open(gd_path, FileAccess.READ)
-		if not gd_file.is_open():
+		if not gd_file or not gd_file.is_open():
 			printerr('Failed to open "%s".' % gd_path)
 			quit(1)
 			return
@@ -23,7 +21,7 @@ func _init() -> void:
 
 		var txt_path: String = gd_path.trim_suffix(".gd") + ".txt"
 		var txt_file: FileAccess = FileAccess.open(txt_path, FileAccess.READ)
-		if not txt_file.is_open():
+		if not txt_file or not txt_file.is_open():
 			printerr('Failed to open "%s".' % txt_path)
 			quit(1)
 			return
@@ -44,6 +42,9 @@ func _init() -> void:
 			elif line.begins_with("# statement_removing_regex="):
 				_preprocessor.statement_removing_regex = RegEx.create_from_string(
 						line.trim_prefix("# statement_removing_regex="))
+			elif line.begins_with("# dynamic_feature_tags="):
+				_preprocessor.set_dynamic_feature_tags(
+						line.trim_prefix("# dynamic_feature_tags=").split(","))
 			else:
 				break
 			i += 1
@@ -67,3 +68,12 @@ func _init() -> void:
 
 	print("All tests passed!")
 	quit(0)
+
+
+func _get_gd_paths(dir_path: String, result: PackedStringArray, ignore_root: bool) -> void:
+	for subdir_name: String in DirAccess.get_directories_at(dir_path):
+		_get_gd_paths(dir_path.path_join(subdir_name), result, false)
+	if not ignore_root:
+		for file_name: String in DirAccess.get_files_at(dir_path):
+			if file_name.ends_with(".gd"):
+				var _t: bool = result.append(dir_path.path_join(file_name))

@@ -10,11 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Cache Godot
         id: cache-godot
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         env:
           cache-name: cache-godot
         with:
@@ -29,4 +29,4 @@ jobs:
 
       - name: Run tests
         run: |
-          ./${{ env.GODOT_EXECUTABLE }} --headless -s test_runner.gd
+          ./${{ env.GODOT_EXECUTABLE }} --headless -s tests/runner.gd

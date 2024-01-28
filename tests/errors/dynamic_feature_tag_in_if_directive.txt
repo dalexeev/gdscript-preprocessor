@@ -1,0 +1,3 @@
+ERROR
+Line: 3
+Message: Invalid or dynamic condition for directive "#~if".

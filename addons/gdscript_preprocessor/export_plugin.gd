@@ -4,20 +4,39 @@ extends EditorExportPlugin
 @warning_ignore("inferred_declaration")
 const _Preprocessor = preload("./preprocessor.gd")
 
-var _config_path: String
 var _preprocessor: _Preprocessor = _Preprocessor.new()
-var _platform: EditorExportPlatform
-var _features: PackedStringArray
-
-
-func _init() -> void:
-	var script: Script = get_script()
-	_config_path = ProjectSettings.globalize_path(script.resource_path) \
-			.get_base_dir().path_join("options.cfg")
 
 
 func _get_name() -> String:
 	return "gdscript_preprocessor"
+
+
+func _get_export_options(_platform: EditorExportPlatform) -> Array[Dictionary]:
+	return [
+		{
+			option = {
+				name = "gdscript_preprocessor/statement_removing_regex_debug",
+				type = TYPE_STRING,
+			},
+			default_value = "",
+		},
+		{
+			option = {
+				name = "gdscript_preprocessor/statement_removing_regex_release",
+				type = TYPE_STRING,
+			},
+			default_value = r"^(?:breakpoint|assert\(|print_debug\(|print_stack\()",
+		},
+		{
+			option = {
+				name = "gdscript_preprocessor/dynamic_feature_tags",
+				type = TYPE_STRING,
+			},
+			default_value = "arm,arm32,arm64,arm64-v8a,armeabi,armeabi-v7a,bsd,freebsd" \
+					+ ",linux,linuxbsd,movie,netbsd,openbsd,system_fonts,web_android" \
+					+ ",web_ios,web_linuxbsd,web_macos,web_windows"
+		},
+	]
 
 
 func _export_begin(
@@ -28,17 +47,16 @@ func _export_begin(
 ) -> void:
 	_preprocessor.features = features
 	_preprocessor.is_debug = is_debug
-	_preprocessor.statement_removing_regex = null
 
 	var regex: String
-	var config: ConfigFile = ConfigFile.new()
-	var _err: Error = config.load(_config_path)
 	if is_debug:
-		regex = _get_option(config, "statements", "removing_regex_debug", "")
+		regex = get_option(&"gdscript_preprocessor/statement_removing_regex_debug")
 	else:
-		regex = _get_option(config, "statements", "removing_regex_release",
-				r"^(?:breakpoint|assert\(|print_debug\(|print_stack\()")
-	if not regex.is_empty():
+		regex = get_option(&"gdscript_preprocessor/statement_removing_regex_release")
+
+	if regex.is_empty():
+		_preprocessor.statement_removing_regex = null
+	else:
 		_preprocessor.statement_removing_regex = RegEx.create_from_string(regex)
 		if not _preprocessor.statement_removing_regex.is_valid():
 			if is_debug:
@@ -46,39 +64,19 @@ func _export_begin(
 			else:
 				printerr("Invalid statement removing regex for release builds.")
 
-
-func _begin_customize_resources(
-		platform: EditorExportPlatform,
-		features: PackedStringArray,
-) -> bool:
-	assert(features == _preprocessor.features)
-	_platform = platform
-	_features = features
-	return true
+	var tags: String = get_option(&"gdscript_preprocessor/dynamic_feature_tags")
+	_preprocessor.set_dynamic_feature_tags(tags.split(","))
 
 
-func _get_customization_configuration_hash() -> int:
-	return hash(_platform) + hash(_features)
+func _export_file(path: String, type: String, _features: PackedStringArray) -> void:
+	if type != "GDScript":
+		return
 
-
-func _customize_resource(resource: Resource, path: String) -> Resource:
-	var gdscript: GDScript = resource as GDScript
-	if not gdscript:
-		return null
-
-	if _preprocessor.preprocess(gdscript.source_code):
-		var new_gdscript: GDScript = GDScript.new()
-		new_gdscript.source_code = _preprocessor.result
-		return new_gdscript
+	if _preprocessor.preprocess(FileAccess.get_file_as_string(path)):
+		add_file(path, _preprocessor.result.to_utf8_buffer(), false)
 	else:
 		printerr("%s:%s - %s" % [
 			"<unknown>" if path.is_empty() else path,
 			_preprocessor.error_line,
 			_preprocessor.error_message,
 		])
-		return null
-
-
-func _get_option(config: ConfigFile, section: String, key: String, default: Variant) -> Variant:
-	var value: Variant = config.get_value(section, key, default)
-	return value if typeof(value) == typeof(default) else default
