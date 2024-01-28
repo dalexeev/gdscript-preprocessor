@@ -34,7 +34,7 @@ func _get_export_options(_platform: EditorExportPlatform) -> Array[Dictionary]:
 			},
 			default_value = "arm,arm32,arm64,arm64-v8a,armeabi,armeabi-v7a,bsd,freebsd" \
 					+ ",linux,linuxbsd,movie,netbsd,openbsd,system_fonts,web_android" \
-					+ ",web_ios,web_linuxbsd,web_macos,web_windows"
+					+ ",web_ios,web_linuxbsd,web_macos,web_windows",
 		},
 	]
 

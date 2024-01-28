@@ -2,3 +2,4 @@ OK
 func test() -> void:
 	if true: print(1)
 	if randi(): print(3)
+	if true: if false: print(4)

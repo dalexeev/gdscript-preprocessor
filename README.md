@@ -2,8 +2,7 @@
 
 An export plugin for stripping comments and "conditional compilation" of GDScript.
 
-Version: **1.0-dev**. Compatible with Godot **4.2.x**. Status: should be ready
-for production use. Please report if you find any bugs.
+Compatible with Godot **4.2.x**. Ready for production use. Please report if you find any bugs.
 
 ## How to use
 
