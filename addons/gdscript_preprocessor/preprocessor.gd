@@ -6,15 +6,22 @@ enum _Trilean {FALSE = -1, UNKNOWN = 0, TRUE = +1}
 
 enum _Status {
 	NORMAL, # Non-conditional block.
-	# Conditional block (`if`/`elif`/`else`):
-	WAITING, # Replace next non-`FALSE` `elif` with `if` or `else` with `if true`.
-	STARTED, # `if` was outputted (some `if`/`elif` was UNKNOWN).
-	FINISHED, # `TRUE` branch was found. Next `elif`/`else` blocks must be removed.
+	# Conditional block (`if`/`elif`/`else`)
+	# ======================================
+	# Nothing outputted yet.
+	# Replace next non-`FALSE` `elif` with `if` or `else` with `if true`.
+	WAITING,
+	# `if` was outputted (some `if`/`elif` was `UNKNOWN`).
+	STARTED,
+	# The end is reached (a `TRUE` branch or `else` in source code).
+	# Next `elif`/`else` blocks must be removed.
+	FINISHED,
 }
 
 class _Block extends RefCounted:
 	var indent: int
 	var empty: bool
+	var has_return: bool
 	var state: _Trilean
 	var status: _Status
 
@@ -33,6 +40,51 @@ const _BRACKET_CLOSE: int = 0x005D # "]"
 const _SMALL_R:       int = 0x0072 # "r"
 const _BRACE_OPEN:    int = 0x007B # "{"
 const _BRACE_CLOSE:   int = 0x007D # "}"
+
+enum _Context {
+	NONE,
+	FUNC,
+	VAR,
+}
+
+const _VARIANT_DEFAULTS: Dictionary = {
+	"bool":               "false",
+	"int":                "0",
+	"float":              "0.0",
+	"String":             '""',
+	"Vector2":            "Vector2()",
+	"Vector2i":           "Vector2i()",
+	"Rect2":              "Rect2()",
+	"Rect2i":             "Rect2i()",
+	"Vector3":            "Vector3()",
+	"Vector3i":           "Vector3i()",
+	"Transform2D":        "Transform2D()",
+	"Vector4":            "Vector4()",
+	"Vector4i":           "Vector4i()",
+	"Plane":              "Plane()",
+	"Quaternion":         "Quaternion()",
+	"AABB":               "AABB()",
+	"Basis":              "Basis()",
+	"Transform3D":        "Transform3D()",
+	"Projection":         "Projection()",
+	"Color":              "Color()",
+	"StringName":         '&""',
+	"NodePath":           '^""',
+	"RID":                "RID()",
+	"Callable":           "Callable()",
+	"Signal":             "Signal()",
+	"Dictionary":         "{}",
+	"Array":              "[]",
+	"PackedByteArray":    "PackedByteArray()",
+	"PackedInt32Array":   "PackedInt32Array()",
+	"PackedInt64Array":   "PackedInt64Array()",
+	"PackedFloat32Array": "PackedFloat32Array()",
+	"PackedFloat64Array": "PackedFloat64Array()",
+	"PackedStringArray":  "PackedStringArray()",
+	"PackedVector2Array": "PackedVector2Array()",
+	"PackedVector3Array": "PackedVector3Array()",
+	"PackedColorArray":   "PackedColorArray()",
+}
 
 const _PARENS: Dictionary = {
 	_PAREN_OPEN: _PAREN_CLOSE,
@@ -59,12 +111,22 @@ var _indent_char_str: String
 var _indent_char: int
 var _indent_size: int
 
-var _root_parent: _Block # A fake parent of root.
-var _block_stack: Array[_Block]
 var _if_directive_stack: Array[bool]
 var _output_enabled: bool = true
+
+var _root_parent: _Block # A fake parent of root.
+var _block_stack: Array[_Block]
+
+var _context: _Context = _Context.NONE
+var _fake_return: String
+var _var_fake_return: String
+
 var _paren_stack: Array[int]
 
+var _func_type_regex: RegEx = RegEx.create_from_string(
+		r"""->\s*([^\s\["']+)\s*(?:\[[^\["']+\])?\s*:$""")
+var _var_type_regex: RegEx = RegEx.create_from_string(
+		r"""^var[^:=]+:\s*([^\s:=\["']+)""")
 var _os_has_feature_regex: RegEx = RegEx.create_from_string(
 		r"""OS\.has_feature\((["'])(\w+)\1\)""")
 var _condition_regex: RegEx = RegEx.create_from_string(
@@ -92,11 +154,17 @@ func preprocess(source_code: String) -> bool:
 	_indent_char = 0
 	_indent_size = 0
 
+	_if_directive_stack.clear()
+	_output_enabled = true
+
 	_root_parent = _Block.new()
 	_block_stack.clear()
 	_block_stack.push_back(_Block.new())
-	_if_directive_stack.clear()
-	_output_enabled = true
+
+	_context = _Context.NONE
+	_fake_return = ""
+	_var_fake_return = ""
+
 	_paren_stack.clear()
 
 	while _position < _length:
@@ -120,8 +188,19 @@ func preprocess(source_code: String) -> bool:
 	var last_empty_block: _Block = null
 	while not _block_stack.is_empty():
 		var block: _Block = _block_stack.pop_back()
+
+		if block.indent == 1:
+			if _context == _Context.FUNC and _fake_return and not block.has_return:
+				_append(block.indent, _fake_return)
+				block.empty = false
+		elif block.indent == 2:
+			if _context == _Context.VAR and _fake_return and not block.has_return:
+				_append(block.indent, _fake_return)
+				block.empty = false
+
 		if block.empty:
 			last_empty_block = block
+
 	if last_empty_block and last_empty_block.state != _Trilean.FALSE:
 		_append(last_empty_block.indent + _indent_size, "pass")
 
@@ -259,13 +338,52 @@ func _parse_statement() -> bool:
 		var last_empty_block: _Block = null
 		while indent_level < _block_stack.back().indent:
 			var block: _Block = _block_stack.pop_back()
+
+			if block.indent == 1:
+				if _context == _Context.FUNC and _fake_return and not block.has_return:
+					_append(block.indent, _fake_return)
+					block.empty = false
+			elif block.indent == 2:
+				if _context == _Context.VAR and _fake_return and not block.has_return:
+					_append(block.indent, _fake_return)
+					block.empty = false
+
 			if block.empty:
 				last_empty_block = block
+
 		current_block = _block_stack.back()
 		if current_block.empty:
 			last_empty_block = current_block
+
 		if last_empty_block and last_empty_block.state != _Trilean.FALSE:
 			_append(last_empty_block.indent + _indent_size, "pass")
+
+	if indent_level == 0:
+		_context = _Context.NONE
+		_fake_return = ""
+		_var_fake_return = ""
+
+		if string.begins_with("func"):
+			_context = _Context.FUNC
+			var regex_match: RegExMatch = _func_type_regex.search(string)
+			if regex_match:
+				var type: String = regex_match.get_string(1)
+				if type != "void":
+					_fake_return = "return " + _VARIANT_DEFAULTS.get(type, "null")
+		elif string.begins_with("var"):
+			_context = _Context.VAR
+			var regex_match: RegExMatch = _var_type_regex.search(string)
+			if regex_match:
+				_var_fake_return = "return " + _VARIANT_DEFAULTS.get(
+						regex_match.get_string(1), "null")
+			else:
+				_var_fake_return = "return null"
+	elif indent_level == 1:
+		if _context == _Context.VAR:
+			if string.begins_with("get:") or string.begins_with("get():"):
+				_fake_return = _var_fake_return
+			else:
+				_fake_return = ""
 
 	var parent_block: _Block
 	if _block_stack.size() > 1:
@@ -274,7 +392,7 @@ func _parse_statement() -> bool:
 		parent_block = _root_parent
 
 	if string.begins_with("if "):
-		if parent_block.state == _Trilean.FALSE:
+		if parent_block.state == _Trilean.FALSE or current_block.has_return:
 			current_block.state = _Trilean.FALSE
 			return true
 
@@ -293,7 +411,8 @@ func _parse_statement() -> bool:
 				current_block.status = _Status.FINISHED
 
 	elif string.begins_with("elif "):
-		if parent_block.state == _Trilean.FALSE or current_block.status == _Status.FINISHED:
+		if parent_block.state == _Trilean.FALSE or current_block.has_return \
+				or current_block.status == _Status.FINISHED:
 			current_block.state = _Trilean.FALSE
 			return true
 
@@ -316,30 +435,23 @@ func _parse_statement() -> bool:
 				current_block.status = _Status.FINISHED
 
 	elif string.begins_with("else:"):
-		if parent_block.state == _Trilean.FALSE or current_block.status == _Status.FINISHED:
+		if parent_block.state == _Trilean.FALSE or current_block.has_return \
+				or current_block.status == _Status.FINISHED:
 			current_block.state = _Trilean.FALSE
 			return true
 
 		@warning_ignore("int_as_enum_without_cast")
 		current_block.state = -current_block.state # Fast trilean NOT.
-		match current_block.state:
-			_Trilean.UNKNOWN:
-				if current_block.status == _Status.WAITING:
-					_append(current_block.indent, "if true:" + string.substr(string_colon_pos + 1))
-					parent_block.empty = false
-					current_block.status = _Status.STARTED
-				else:
-					_append(current_block.indent, "else:" + string.substr(string_colon_pos + 1))
-			_Trilean.TRUE:
-				if current_block.status == _Status.WAITING:
-					_append(current_block.indent, "if true:" + string.substr(string_colon_pos + 1))
-					parent_block.empty = false
-				else:
-					_append(current_block.indent, "else:" + string.substr(string_colon_pos + 1))
-				current_block.status = _Status.FINISHED
+		# We don't care if it's `UNKNOWN` or `TRUE`.
+		if current_block.status == _Status.WAITING:
+			_append(current_block.indent, "if true:" + string.substr(string_colon_pos + 1))
+			parent_block.empty = false
+		else:
+			_append(current_block.indent, string)
+		current_block.status = _Status.FINISHED
 
 	else:
-		if parent_block.state == _Trilean.FALSE \
+		if parent_block.state == _Trilean.FALSE or current_block.has_return \
 				or (statement_removing_regex and statement_removing_regex.search(string)):
 			current_block.state = _Trilean.FALSE
 			return true
@@ -351,6 +463,15 @@ func _parse_statement() -> bool:
 		current_block.empty = false
 		current_block.state = parent_block.state
 		current_block.status = _Status.NORMAL
+		if string.begins_with("return"):
+			if string.length() == len("return"):
+				current_block.has_return = true
+				current_block.state = _Trilean.FALSE
+			else:
+				var c: int = string.unicode_at(len("return"))
+				if c == _SPACE or c == _TAB or c == _PAREN_OPEN:
+					current_block.has_return = true
+					current_block.state = _Trilean.FALSE
 
 	return true
 

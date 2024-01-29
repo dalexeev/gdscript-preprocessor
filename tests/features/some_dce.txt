@@ -1,0 +1,14 @@
+OK
+func editor_only() -> void:
+	if true:
+		return
+	print("editor-only (not removed)")
+func test() -> void:
+	if true:
+		if true:
+			print(1)
+			return
+		print(3)
+		return
+	print(9)
+	return

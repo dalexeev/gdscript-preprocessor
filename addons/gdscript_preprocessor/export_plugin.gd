@@ -25,7 +25,7 @@ func _get_export_options(_platform: EditorExportPlatform) -> Array[Dictionary]:
 				name = "gdscript_preprocessor/statement_removing_regex_release",
 				type = TYPE_STRING,
 			},
-			default_value = r"^(?:breakpoint|assert\(|print_debug\(|print_stack\()",
+			default_value = r"^(?:@tool|breakpoint|assert\(|print_debug\(|print_stack\()",
 		},
 		{
 			option = {
@@ -73,6 +73,7 @@ func _export_file(path: String, type: String, _features: PackedStringArray) -> v
 		return
 
 	if _preprocessor.preprocess(FileAccess.get_file_as_string(path)):
+		skip()
 		add_file(path, _preprocessor.result.to_utf8_buffer(), false)
 	else:
 		printerr("%s:%s - %s" % [

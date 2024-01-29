@@ -1,6 +1,7 @@
 # features=pc,s3tc,linux,bptc,x86_64,template,release,template_release
 # is_debug=false
-# statement_removing_regex=^(?:breakpoint|assert\(|print_debug\(|print_stack\()
+# statement_removing_regex=^(?:@tool|breakpoint|assert\(|print_debug\(|print_stack\()
+@tool
 
 func test() -> void:
 	print(1)

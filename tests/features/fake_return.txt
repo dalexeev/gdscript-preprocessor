@@ -1,0 +1,57 @@
+OK
+var var_set_get: int:
+	set(value):
+		if true:
+			prints(1, value)
+	get:
+		if true:
+			return 1
+		return 0
+var var_get_set: int:
+	get:
+		if true:
+			return 1
+		return 0
+	set(value):
+		if true:
+			prints(1, value)
+@warning_ignore("untyped_declaration")
+var var_untyped:
+	get:
+		if true:
+			return 1
+		return null
+var var_int: int:
+	get:
+		if true:
+			return 1
+		return 0
+var var_array_int: Array[int]:
+	get:
+		if true:
+			return [1]
+		return []
+var var_object: Object:
+	get:
+		if true:
+			return Node.new()
+		return null
+@warning_ignore("untyped_declaration")
+func func_untyped():
+	if true:
+		return
+func func_void() -> void:
+	if true:
+		return
+func func_int() -> int:
+	if true:
+		return 1
+	return 0
+func func_array_int() -> Array[int]:
+	if true:
+		return [1]
+	return []
+func func_object() -> Object:
+	if true:
+		return Node.new()
+	return null
