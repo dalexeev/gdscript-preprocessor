@@ -84,6 +84,7 @@ const _VARIANT_DEFAULTS: Dictionary = {
 	"PackedVector2Array": "PackedVector2Array()",
 	"PackedVector3Array": "PackedVector3Array()",
 	"PackedColorArray":   "PackedColorArray()",
+	"PackedVector4Array": "PackedVector4Array()",
 }
 
 const _PARENS: Dictionary = {

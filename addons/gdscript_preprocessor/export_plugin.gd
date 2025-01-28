@@ -1,14 +1,21 @@
 extends EditorExportPlugin
 
 
-@warning_ignore("inferred_declaration")
 const _Preprocessor = preload("./preprocessor.gd")
 
 var _preprocessor: _Preprocessor = _Preprocessor.new()
+var _addon_folder: String
+
+
+func _init() -> void:
+	var script: Script = get_script()
+	_addon_folder = script.resource_path.get_base_dir() + "/"
 
 
 func _get_name() -> String:
-	return "gdscript_preprocessor"
+	# Docs: "The plugins are sorted by name before exporting".
+	# See https://github.com/godotengine/godot/issues/93487.
+	return "AAA_gdscript_preprocessor"
 
 
 func _get_export_options(_platform: EditorExportPlatform) -> Array[Dictionary]:
@@ -72,7 +79,9 @@ func _export_file(path: String, type: String, _features: PackedStringArray) -> v
 	if type != "GDScript":
 		return
 
-	if _preprocessor.preprocess(FileAccess.get_file_as_string(path)):
+	if path.begins_with(_addon_folder):
+		skip()
+	elif _preprocessor.preprocess(FileAccess.get_file_as_string(path)):
 		skip()
 		add_file(path, _preprocessor.result.to_utf8_buffer(), false)
 	else:

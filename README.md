@@ -2,7 +2,7 @@
 
 An export plugin for stripping comments and "conditional compilation" of GDScript.
 
-Compatible with Godot **4.2.x**. Ready for production use. Please report if you find any bugs.
+Compatible with Godot **4.3.x**. Ready for production use. Please report if you find any bugs.
 
 ## How to use
 
@@ -13,6 +13,16 @@ Compatible with Godot **4.2.x**. Ready for production use. Please report if you 
 The original scripts will not be changed, but in PCK/ZIP the scripts will be changed.
 Use ZIP to check to check the result. If any errors occurred during the export,
 you will see them in the Output Log.
+
+> [!TIP]
+> Since 4.3, Godot supports exporting GDScript in binary mode out of the box. If your goal
+> is just to strip comments from the exported project, you may not need to use this plugin.
+
+> [!IMPORTANT]
+> If you are interested in features like conditional compilation and therefore want to use
+> this plugin, please note that it exports GDScript as text, regardless of the selected
+> export mode. But you should not lose much from this, the binary mode does not provide
+> significant obfuscation.
 
 ## Settings
 
@@ -25,14 +35,12 @@ You can change the settings in the Options tab of the Export dialog:
 
 </details>
 
-## Important note
-
-Each supported platform has certain standard feature tags (plus any custom tags you specify
-in the export preset). However, there are some standard tags that are not known in advance.
-See [godotengine/godot#76990](https://github.com/godotengine/godot/issues/76990) and
-[godotengine/godot#76996](https://github.com/godotengine/godot/pull/76996) for details.
-
-You can specify a list of feature tags that will be treated as dynamic in the export options.
+> [!NOTE]
+> Each supported platform has certain standard feature tags (plus any custom tags you specify
+> in the export preset). However, there are some standard tags that are not known in advance.
+> See [godotengine/godot#76990](https://github.com/godotengine/godot/issues/76990) and
+> [godotengine/godot#76996](https://github.com/godotengine/godot/pull/76996) for details.
+> You can specify a list of feature tags that will be treated as dynamic in the export options.
 
 ## Features
 

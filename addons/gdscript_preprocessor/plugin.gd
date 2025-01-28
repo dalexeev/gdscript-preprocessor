@@ -2,7 +2,6 @@
 extends EditorPlugin
 
 
-@warning_ignore("inferred_declaration")
 const _ExportPlugin = preload("./export_plugin.gd")
 
 var _export_plugin: _ExportPlugin = _ExportPlugin.new()

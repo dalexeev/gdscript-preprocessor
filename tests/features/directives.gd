@@ -11,9 +11,9 @@ var a2: int
 var a3: int
 #~endif # non_existent
 
-#~if OS.has_feature("linux")
+#~if OS.has_feature("pc")
 var a4: int
-#~endif # linux
+#~endif # pc
 
 #~endif # debug
 
@@ -26,13 +26,13 @@ var a7: int
 #~endif # debug
 #~endif # non_existent
 
-#~if OS.has_feature("non_existent") or OS.has_feature("linux")
+#~if OS.has_feature("non_existent") or OS.has_feature("pc")
 var a8: int
-#~endif # non_existent or linux
+#~endif # non_existent or pc
 
-#~if OS.has_feature("non_existent") and OS.has_feature("linux")
+#~if OS.has_feature("non_existent") and OS.has_feature("pc")
 var a9: int
-#~endif # non_existent and linux
+#~endif # non_existent and pc
 
 #~if OS.is_debug_build()
 var a10: int

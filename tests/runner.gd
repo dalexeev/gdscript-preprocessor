@@ -1,7 +1,6 @@
 extends SceneTree
 
 
-@warning_ignore("inferred_declaration")
 const _Preprocessor = preload("../addons/gdscript_preprocessor/preprocessor.gd")
 
 var _preprocessor: _Preprocessor = _Preprocessor.new()
